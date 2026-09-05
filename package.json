@@ -1,0 +1,27 @@
+{
+  "name": "@zesun33/mcp-rtl-review",
+  "version": "0.1.0",
+  "description": "Model Context Protocol (MCP) server for AST-backed static RTL review, semantic bug detection, and code review scoring",
+  "type": "module",
+  "bin": {
+    "mcp-rtl-review": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "tsx --test tests/**/*.test.ts",
+    "test:unit": "tsx --test tests/ast_parser.test.ts tests/rules.test.ts tests/contract.test.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "fast-xml-parser": "^4.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
