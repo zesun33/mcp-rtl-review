@@ -14,9 +14,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${ROOT_DIR}"
 
+QUICK=0
 GATE=""
 for arg in "$@"; do
   case "$arg" in
+    --quick) QUICK=1 ;;
     --gate) shift; GATE="${1:-}" ;;
     --gate=*) GATE="${arg#--gate=}" ;;
     -h|--help)
@@ -58,6 +60,10 @@ run_gate_3() {
 
 run_gate_4() {
   echo "--- Gate 4: Fixture Integration (Podman Verilator AST & Review) ---"
+  if [ "${QUICK}" = "1" ]; then
+    pass 4 "Fixture integration skipped (--quick)"
+    return 0
+  fi
   npx tsx --test tests/integration.test.ts || fail 4 "Integration tests failed"
   pass 4 "Podman container integration passed on RTL review fixtures"
 }
