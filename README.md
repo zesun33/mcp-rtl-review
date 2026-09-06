@@ -3,6 +3,7 @@
 > Model Context Protocol (MCP) server for AST-backed static RTL code review, semantic bug detection, and code review scoring.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![CI](https://github.com/zesun33/mcp-rtl-review/actions/workflows/ci.yml/badge.svg)](https://github.com/zesun33/mcp-rtl-review/actions/workflows/ci.yml)
 [![Protocol: MCP](https://img.shields.io/badge/protocol-MCP_stdio-blueviolet)](https://modelcontextprotocol.io)
 [![Runtime: Rootless Podman](https://img.shields.io/badge/runtime-rootless_podman-brightgreen)](#execution-runtime)
 
@@ -179,8 +180,11 @@ Works seamlessly across all modern AI coding environments:
 Strict 6-gate verification suite matching the portfolio engineering standard:
 
 ```bash
-# Full verification (all 6 gates)
+# Full verification (all 6 gates with Podman integration)
 ./scripts/verify.sh
+
+# Fast / CI verification (headless environments)
+./scripts/verify.sh --quick
 
 # Target specific gates
 ./scripts/verify.sh --gate 1   # Spec lock & package integrity
