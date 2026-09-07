@@ -15,6 +15,11 @@ export const SUPPORTED_RULES = [
   'UNDRIVEN_NET',
   'COMBINATIONAL_LOOP',
   'UNUSED_SIGNAL',
+  'MISSING_RESET',
+  'LATCH_RISK',
+  'MULTIPLE_DRIVERS',
+  'CASE_DEFAULT_MISSING',
+  'INITIAL_BLOCK_SYNTH',
 ];
 
 export interface ReviewOptions {
@@ -61,6 +66,21 @@ export function parseVerilatorOutput(output: string): ReviewViolation[] {
       severity = 'error';
       fixSuggestion =
         'Break the combinational feedback loop by inserting a clocked register or restructuring logic.';
+    } else if (warnCode === 'LATCH') {
+      ruleId = 'LATCH_RISK';
+      severity = 'warning';
+      fixSuggestion =
+        'Assign the signal in all branches (add else/default) or give it a default value at the top of the combinational block to avoid an inferred latch.';
+    } else if (warnCode === 'MULTIDRIVEN') {
+      ruleId = 'MULTIPLE_DRIVERS';
+      severity = 'error';
+      fixSuggestion =
+        'Drive the net from exactly one source: merge the drivers with explicit muxing or split into separate nets.';
+    } else if (warnCode === 'CASEINCOMPLETE') {
+      ruleId = 'CASE_DEFAULT_MISSING';
+      severity = 'warning';
+      fixSuggestion =
+        "Add a 'default' branch to the case statement so no input combination infers a latch or X-state.";
     }
 
     violations.push({
@@ -96,6 +116,23 @@ export function evaluateAstRules(ast: ParsedAst): {
 
       if (alw.isSequential) {
         sequentialBlocks++;
+
+        // Rule: MISSING_RESET — clocked block with no reset in sensitivity.
+        const hasReset = alw.senItems.some(
+          (s) => s.signalName && /rst|reset/i.test(s.signalName)
+        );
+        if (!hasReset) {
+          violations.push({
+            ruleId: 'MISSING_RESET',
+            severity: 'warning',
+            file: mod.file,
+            line: alw.loc.startLine,
+            message:
+              'Sequential block has no reset in its sensitivity list. Registers power up in an unknown state.',
+            fixSuggestion:
+              'Add an asynchronous or synchronous reset (e.g. always @(posedge clk or negedge rst_n) with if (!rst_n)).',
+          });
+        }
 
         // Rule: SEQ_BLOCKING_ASSIGN
         for (const assign of alw.assignments) {
@@ -197,6 +234,108 @@ export function computeReviewSummary(
   };
 }
 
+function stripSourceComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => '\n'.repeat((m.match(/\n/g) || []).length))
+    .replace(/\/\/[^\n]*/g, '');
+}
+
+function isTestbenchFile(file: string): boolean {
+  const base = file.split('/').pop() || file;
+  return /_tb\.[sv]+$|testbench/i.test(base);
+}
+
+/**
+ * Source-text rules that need no AST: INITIAL_BLOCK_SYNTH and the
+ * CASE_DEFAULT_MISSING fallback (for Verilator versions that stay silent).
+ * Testbench files (`*_tb.v`) are skipped: stimulus legitimately uses them.
+ */
+export function evaluateSourceTextRules(
+  sources: Array<{ file: string; content: string }>
+): ReviewViolation[] {
+  const violations: ReviewViolation[] = [];
+
+  for (const { file, content } of sources) {
+    if (isTestbenchFile(file)) continue;
+    const clean = stripSourceComments(content);
+    const lines = clean.split('\n');
+
+    // Rule: INITIAL_BLOCK_SYNTH
+    lines.forEach((line, idx) => {
+      if (/^\s*initial\b/.test(line)) {
+        violations.push({
+          ruleId: 'INITIAL_BLOCK_SYNTH',
+          severity: 'warning',
+          file,
+          line: idx + 1,
+          message:
+            'initial block in synthesizable RTL is ignored by most synthesis tools; behavior will differ between simulation and silicon.',
+          fixSuggestion:
+            'Replace with an explicit reset sequence, or move stimulus to a *_tb testbench file.',
+        });
+      }
+    });
+
+    // Rule: CASE_DEFAULT_MISSING (fallback) — track case/endcase nesting.
+    interface CaseFrame {
+      line: number;
+      hasDefault: boolean;
+    }
+    const stack: CaseFrame[] = [];
+    const tokenRe = /\b(casex|casez|case|endcase|default)\b/g;
+    lines.forEach((line, idx) => {
+      let m: RegExpExecArray | null;
+      tokenRe.lastIndex = 0;
+      while ((m = tokenRe.exec(line)) !== null) {
+        const tok = m[1];
+        if (tok === 'case' || tok === 'casex' || tok === 'casez') {
+          stack.push({ line: idx + 1, hasDefault: false });
+        } else if (tok === 'default') {
+          if (stack.length > 0) stack[stack.length - 1].hasDefault = true;
+        } else if (tok === 'endcase') {
+          const frame = stack.pop();
+          if (frame && !frame.hasDefault) {
+            violations.push({
+              ruleId: 'CASE_DEFAULT_MISSING',
+              severity: 'warning',
+              file,
+              line: frame.line,
+              message:
+                'case statement has no default branch; uncovered selections infer latches or propagate X.',
+              fixSuggestion:
+                "Add a 'default' branch assigning safe values to all outputs.",
+            });
+          }
+        }
+      }
+    });
+
+    // Rule: MULTIPLE_DRIVERS (source fallback) — Verilator lint stays silent
+    // on duplicate continuous assigns, so flag repeated `assign <net> =` here.
+    const drivenByAssign = new Map<string, number>();
+    lines.forEach((line, idx) => {
+      const m = line.match(/^\s*assign\s+([A-Za-z_][A-Za-z0-9_$]*)/);
+      if (!m) return;
+      const net = m[1];
+      if (drivenByAssign.has(net)) {
+        violations.push({
+          ruleId: 'MULTIPLE_DRIVERS',
+          severity: 'error',
+          file,
+          line: idx + 1,
+          message: `Net '${net}' has multiple continuous drivers (first at line ${drivenByAssign.get(net)}); the short resolves by strength, not intent.`,
+          fixSuggestion:
+            'Drive the net from exactly one source: merge the drivers with explicit muxing or split into separate nets.',
+        });
+      } else {
+        drivenByAssign.set(net, idx + 1);
+      }
+    });
+  }
+
+  return violations;
+}
+
 export function extractAssignmentViolations(violations: ReviewViolation[]): AssignmentCheckResult {
   const blockingInSeq = violations
     .filter((v) => v.ruleId === 'SEQ_BLOCKING_ASSIGN')
@@ -252,5 +391,80 @@ export function extractWidthViolations(violations: ReviewViolation[]): WidthChec
     passed: widthMismatches.length === 0,
     totalMismatches: widthMismatches.length,
     widthMismatches,
+  };
+}
+
+export interface ResetBlockAudit {
+  module: string;
+  file: string;
+  line: number;
+  hasReset: boolean;
+  resetName?: string;
+  resetEdge?: 'POS' | 'NEG';
+  issues: string[];
+}
+
+export interface ResetAuditResult {
+  passed: boolean;
+  totalSequentialBlocks: number;
+  blocksWithReset: number;
+  blocksMissingReset: number;
+  polarityMismatches: number;
+  blocks: ResetBlockAudit[];
+  violations: ReviewViolation[];
+}
+
+/**
+ * Focused reset audit over sequential blocks: presence, identity, edge,
+ * and polarity agreement. Pure function over the parsed AST + violations.
+ */
+export function extractResetAudit(
+  ast: ParsedAst,
+  violations: ReviewViolation[]
+): ResetAuditResult {
+  const blocks: ResetBlockAudit[] = [];
+
+  for (const mod of ast.modules) {
+    for (const alw of mod.alwaysBlocks) {
+      if (!alw.isSequential) continue;
+      const rst = alw.senItems.find(
+        (s) => s.signalName && /rst|reset/i.test(s.signalName)
+      );
+      const issues: string[] = [];
+      if (!rst) {
+        issues.push('MISSING_RESET');
+      }
+      if (
+        alw.hasResetMismatch &&
+        !issues.includes('RESET_POLARITY_MISMATCH')
+      ) {
+        issues.push('RESET_POLARITY_MISMATCH');
+      }
+      blocks.push({
+        module: mod.name,
+        file: mod.file,
+        line: alw.loc.startLine,
+        hasReset: Boolean(rst),
+        resetName: rst?.signalName,
+        resetEdge: rst?.edgeType,
+        issues,
+      });
+    }
+  }
+
+  const resetViolations = violations.filter(
+    (v) => v.ruleId === 'MISSING_RESET' || v.ruleId === 'RESET_POLARITY_MISMATCH'
+  );
+
+  return {
+    passed: resetViolations.length === 0,
+    totalSequentialBlocks: blocks.length,
+    blocksWithReset: blocks.filter((b) => b.hasReset).length,
+    blocksMissingReset: blocks.filter((b) => !b.hasReset).length,
+    polarityMismatches: resetViolations.filter(
+      (v) => v.ruleId === 'RESET_POLARITY_MISMATCH'
+    ).length,
+    blocks,
+    violations: resetViolations,
   };
 }

@@ -17,6 +17,8 @@ test('MCP server registers required RTL review tools', async () => {
   assert.ok(toolNames.includes('rtl_review'), 'Should expose rtl_review');
   assert.ok(toolNames.includes('rtl_check_assignments'), 'Should expose rtl_check_assignments');
   assert.ok(toolNames.includes('rtl_check_widths'), 'Should expose rtl_check_widths');
+  assert.ok(toolNames.includes('rtl_check_resets'), 'Should expose rtl_check_resets');
+  assert.ok(toolNames.includes('rtl_generate_assertion'), 'Should expose rtl_generate_assertion');
   assert.ok(toolNames.includes('rtl_toolchain_info'), 'Should expose rtl_toolchain_info');
 
   for (const tool of response.tools) {

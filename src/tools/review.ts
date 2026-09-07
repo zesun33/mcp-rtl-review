@@ -5,6 +5,7 @@ import { ToolRunner } from '../runner.js';
 import { parseVerilatorXml } from '../parsers/ast.js';
 import {
   evaluateAstRules,
+  evaluateSourceTextRules,
   parseVerilatorOutput,
   computeReviewSummary,
 } from '../rules/engine.js';
@@ -68,6 +69,22 @@ export async function handleRtlReview(
 
   const compilerViolations = parseVerilatorOutput(lintOutput);
 
+  // Source-text rules (no AST needed). Dedupe against compiler findings so
+  // the CASE_DEFAULT_MISSING fallback never double-reports one case block.
+  const textSources = args.verilog_sources
+    .map((src) => {
+      const fullPath = path.isAbsolute(src) ? src : path.join(baseCwd, src);
+      const content = sourceFilesMap.get(src) ?? sourceFilesMap.get(fullPath);
+      return content === undefined ? null : { file: src, content };
+    })
+    .filter((s): s is { file: string; content: string } => s !== null);
+  const textViolations = evaluateSourceTextRules(textSources).filter(
+    (tv) =>
+      !compilerViolations.some(
+        (cv) => cv.ruleId === tv.ruleId && cv.file === tv.file && cv.line === tv.line
+      )
+  );
+
   let astViolations: ReviewViolation[] = [];
   let metrics = {
     modulesAnalyzed: 0,
@@ -99,7 +116,7 @@ export async function handleRtlReview(
 
   const summary = computeReviewSummary(
     astViolations,
-    compilerViolations,
+    [...compilerViolations, ...textViolations],
     metrics,
     {
       ruleset: args.ruleset,

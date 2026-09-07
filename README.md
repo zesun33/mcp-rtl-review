@@ -39,7 +39,12 @@
     "WIDTH_MISMATCH",
     "UNDRIVEN_NET",
     "COMBINATIONAL_LOOP",
-    "UNUSED_SIGNAL"
+    "UNUSED_SIGNAL",
+    "MISSING_RESET",
+    "LATCH_RISK",
+    "MULTIPLE_DRIVERS",
+    "CASE_DEFAULT_MISSING",
+    "INITIAL_BLOCK_SYNTH"
   ]
 }
 ```
@@ -62,7 +67,7 @@
     "combinationalBlocks": 0,
     "linesAnalyzed": 16
   },
-  "rulesChecked": ["SEQ_BLOCKING_ASSIGN", "COMB_NONBLOCKING_ASSIGN", "RESET_POLARITY_MISMATCH", "WIDTH_MISMATCH", "UNDRIVEN_NET", "COMBINATIONAL_LOOP", "UNUSED_SIGNAL"]
+  "rulesChecked": ["SEQ_BLOCKING_ASSIGN", "COMB_NONBLOCKING_ASSIGN", "RESET_POLARITY_MISMATCH", "WIDTH_MISMATCH", "UNDRIVEN_NET", "COMBINATIONAL_LOOP", "UNUSED_SIGNAL", "MISSING_RESET", "LATCH_RISK", "MULTIPLE_DRIVERS", "CASE_DEFAULT_MISSING", "INITIAL_BLOCK_SYNTH"]
 }
 ```
 
@@ -141,6 +146,8 @@
 | `rtl_review` | `verilog_sources: string[]`<br>`top_module?: string`<br>`ruleset?: "strict" \| "standard" \| "relaxed"`<br>`include_info?: boolean`<br>`cwd?: string` | Verilator XML AST + Diagnostics | Full AST-backed static RTL review evaluating assignment discipline, reset polarity, bitwidths, and undriven nets, returning a 0–100 Quality Score. |
 | `rtl_check_assignments` | `verilog_sources: string[]`<br>`top_module?: string`<br>`cwd?: string` | AST Assignment Visitor | Audits source files specifically for assignment discipline violations (`=` in sequential or `<=` in combinational). |
 | `rtl_check_widths` | `verilog_sources: string[]`<br>`top_module?: string`<br>`cwd?: string` | Verilator Semantic Lint | Performs bitwidth analysis to identify implicit truncation and unintended extension bugs. |
+| `rtl_check_resets` | `verilog_sources: string[]`<br>`top_module?: string`<br>`cwd?: string` | AST Reset Visitor | Audits reset usage per sequential block: presence, identity, edge, and polarity agreement. |
+| `rtl_generate_assertion` | `signal: string`<br>`property_type: no_x_after_reset \| reset_value \| req_ack_handshake \| onehot`<br>`clock?`<br>`reset?` | SVA Templates | Generates a SystemVerilog Assertion scaffold with a TODO to bind and prove it (scaffolding only). |
 | `rtl_toolchain_info` | `cwd?: string` | Probe | Returns container/host runtime and version information for the Verilator AST parser and supported rule catalog. |
 
 ---

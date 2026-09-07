@@ -1,6 +1,6 @@
 {
   "name": "@zesun33/mcp-rtl-review",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Model Context Protocol (MCP) server for AST-backed static RTL review, semantic bug detection, and code review scoring",
   "type": "module",
   "bin": {
