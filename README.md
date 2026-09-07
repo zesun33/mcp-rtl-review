@@ -30,7 +30,7 @@
 // Tool Call: rtl_toolchain_info
 {
   "runtime": "podman",
-  "image": "localhost/zesun33/verilog",
+  "image": "ghcr.io/zesun33/verilog",
   "verilatorVersion": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)",
   "rulesSupported": [
     "SEQ_BLOCKING_ASSIGN",
@@ -152,6 +152,28 @@
 
 ---
 
+## Execution Runtime
+
+`mcp-rtl-review` runs inside the [`zesun33/verilog`](https://github.com/zesun33/eda-docker-images) rootless Podman image so tools are identical on any Linux host.
+
+**Public install (recommended — anyone can pull):**
+```bash
+podman pull ghcr.io/zesun33/verilog:latest
+export MCP_RTL_REVIEW_IMAGE=ghcr.io/zesun33/verilog
+```
+
+Local builds from `eda-docker-images` still work as `localhost/zesun33/verilog` (the historical default). Override anytime with `MCP_RTL_REVIEW_IMAGE`.
+
+- Container mount: `-v <workspace>:/workspace:Z -w /workspace`
+- Podman storage option: `--storage-opt overlay.ignore_chown_errors=true`
+
+To force host binaries instead of container execution:
+```bash
+export MCP_RTL_REVIEW_RUNTIME=host
+```
+
+---
+
 ## Client Configuration
 
 To register `mcp-rtl-review` with your AI IDE or agent, add it to your configuration file (e.g., `.cursor/mcp.json`, `claude_desktop_config.json`, or Windsurf settings):
@@ -164,7 +186,7 @@ To register `mcp-rtl-review` with your AI IDE or agent, add it to your configura
       "args": ["/path/to/mcp-rtl-review/dist/index.js"],
       "env": {
         "MCP_RTL_REVIEW_RUNTIME": "podman",
-        "MCP_RTL_REVIEW_IMAGE": "localhost/zesun33/verilog"
+        "MCP_RTL_REVIEW_IMAGE": "ghcr.io/zesun33/verilog"
       }
     }
   }
