@@ -170,7 +170,7 @@ Verified against the available container toolchains: all 12 integration tests pa
 
 Compiler diagnostics and nonzero exits are preserved through temporary-file cleanup. Missing, malformed, or module-free AST output produces a failed review/assignment/reset audit, even if the compiler exits zero. Source paths and top-module arguments are passed as literal arguments rather than interpolated shell text.
 
-Until this source change is released to npm, run the fixed checkout with `npm ci`, `npm run build`, and a client command pointing to `node /path/to/mcp-rtl-review/dist/index.js`. Published `@zesun33/mcp-rtl-review@0.2.1` still contains the earlier backend.
+Version `0.2.2` includes the JSON AST backend and legacy XML fallback. Use `npx -y @zesun33/mcp-rtl-review@0.2.2` to select the fixed release explicitly. Version `0.2.1` contains the earlier XML-only backend. To run a source checkout, use `npm ci`, `npm run build`, and a client command pointing to `node /path/to/mcp-rtl-review/dist/index.js`.
 
 ## Execution Runtime
 
