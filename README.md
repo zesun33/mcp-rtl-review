@@ -9,6 +9,16 @@
 
 `mcp-rtl-review` equips AI coding agents and IDEs (**Cursor**, **Windsurf**, **GitHub Copilot / OpenAI Codex**, **Claude Code**, **Google Antigravity**, **OpenCode**, **Cline**) with structured tools to perform semantic Verilog/SystemVerilog code reviews. It programmatically enforces the cognitive rubrics established in [`hw-agent-skills/skills/rtl-reviewer`](../hw-agent-skills/skills/rtl-reviewer/SKILL.md), parsing full typed ASTs to catch race conditions, improper assignment styles, inverted reset polarities, and bitwidth truncations.
 
+## Install and run
+
+Run this MCP server directly from npm:
+
+```bash
+npx -y @zesun33/mcp-rtl-review
+```
+
+For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-asic`.
+
 ---
 
 ## ⚡ Quick Tour: See It in Action
