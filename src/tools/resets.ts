@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
-import { parseVerilatorXml } from '../parsers/ast.js';
+import { parseGeneratedAst } from '../parsers/ast.js';
 import {
   evaluateAstRules,
   extractResetAudit,
@@ -40,12 +40,15 @@ export async function handleRtlCheckResets(
     }
   }
 
-  const astRes = await runner.generateXmlAst(args.verilog_sources, {
+  const astRes = await runner.generateAst(args.verilog_sources, {
     topModule: args.top_module,
     cwd: args.cwd,
   });
 
-  if (!astRes.xml || !astRes.xml.includes('<verilator_xml>')) {
+  let parsedAst;
+  try {
+    parsedAst = parseGeneratedAst(astRes, sourceFilesMap);
+  } catch (error) {
     return {
       content: [
         {
@@ -59,7 +62,7 @@ export async function handleRtlCheckResets(
               polarityMismatches: 0,
               blocks: [],
               violations: [],
-              error: `Failed to generate AST: ${astRes.stderr.trim() || 'Unknown error'}`,
+              error: `Failed to generate or parse AST: ${error instanceof Error ? error.message : String(error)}`,
             },
             null,
             2
@@ -69,7 +72,6 @@ export async function handleRtlCheckResets(
     };
   }
 
-  const parsedAst = parseVerilatorXml(astRes.xml, sourceFilesMap);
   const evalRes = evaluateAstRules(parsedAst);
   const result = extractResetAudit(parsedAst, evalRes.violations);
 

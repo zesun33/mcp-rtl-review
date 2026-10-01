@@ -88,3 +88,37 @@ test('parseVerilatorXml identifies combinational always block with blocking assi
   assert.equal(alw.assignments[0].type, 'blocking');
   assert.equal(alw.assignments[0].targetVar, 'result');
 });
+
+test('parseVerilatorJson reads an actual 5.050 tree, file metadata, and normalized reset branches', async () => {
+  const fs = await import('node:fs');
+  const { parseVerilatorJson } = await import('../src/parsers/ast.js');
+  const tree = fs.readFileSync(new URL('../fixtures/clean_counter.tree.json', import.meta.url), 'utf8');
+  const metadata = fs.readFileSync(new URL('../fixtures/clean_counter.tree.meta.json', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../fixtures/clean_counter.v', import.meta.url), 'utf8');
+  const ast = parseVerilatorJson(tree, metadata, new Map([['fixtures/clean_counter.v', source]]));
+  assert.equal(ast.modules.length, 1); // Synthetic constant pool in miscsp is excluded.
+  assert.equal(ast.modules[0].file, 'fixtures/clean_counter.v');
+  const alw = ast.modules[0].alwaysBlocks[0];
+  assert.equal(alw.loc.startLine, 8);
+  assert.equal(alw.loc.startCol, 5);
+  assert.equal(alw.isSequential, true);
+  assert.deepEqual(alw.senItems, [{edgeType:'POS',signalName:'clk'}, {edgeType:'NEG',signalName:'rst_n'}]);
+  assert.equal(alw.assignments.length, 2);
+  assert.ok(alw.assignments.every(a => a.type === 'nonblocking' && a.targetVar === 'count'));
+  assert.equal(alw.hasResetMismatch, false);
+});
+
+test('JSON assignments use lhsp as the destination even when rhsp names another variable', async () => {
+  const { parseVerilatorJson } = await import('../src/parsers/ast.js');
+  const tree = {type:'NETLIST', modulesp:[{type:'MODULE', name:'example', loc:'a,1:1,1:8', stmtsp:[
+    {type:'ALWAYS', loc:'a,2:1,2:7', sentreep:[], stmtsp:[
+      {type:'ASSIGN', loc:'a,3:7,3:8', rhsp:[{type:'VARREF',name:'input_value'}], lhsp:[{type:'VARREF',name:'output_value'}]},
+    ]},
+  ]}]};
+  const ast = parseVerilatorJson(JSON.stringify(tree), '{"files":{"a":{"filename":"example.v"}}}');
+  const assign = ast.modules[0].alwaysBlocks[0].assignments[0];
+  assert.equal(assign.type, 'blocking');
+  assert.equal(assign.targetVar, 'output_value');
+  assert.equal(assign.line, 3);
+  assert.equal(assign.column, 7);
+});

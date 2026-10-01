@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { z } from 'zod';
 import { ToolRunner } from '../runner.js';
-import { parseVerilatorXml } from '../parsers/ast.js';
+import { parseGeneratedAst } from '../parsers/ast.js';
 import {
   evaluateAstRules,
   evaluateSourceTextRules,
@@ -55,8 +55,8 @@ export async function handleRtlReview(
     }
   }
 
-  // 1. Generate XML AST
-  const astRes = await runner.generateXmlAst(args.verilog_sources, {
+  // 1. Generate the AST supported by the active Verilator toolchain
+  const astRes = await runner.generateAst(args.verilog_sources, {
     topModule: args.top_module,
     cwd: args.cwd,
   });
@@ -94,23 +94,19 @@ export async function handleRtlReview(
     linesAnalyzed,
   };
 
-  if (astRes.xml && astRes.xml.includes('<verilator_xml>')) {
-    const parsedAst = parseVerilatorXml(astRes.xml, sourceFilesMap);
+  try {
+    const parsedAst = parseGeneratedAst(astRes, sourceFilesMap);
     const evalRes = evaluateAstRules(parsedAst);
     astViolations = evalRes.violations;
-    metrics = {
-      ...evalRes.metrics,
-      linesAnalyzed,
-    };
-  } else if (astRes.exitCode !== 0) {
-    // AST generation failed (syntax error or missing file)
+    metrics = { ...evalRes.metrics, linesAnalyzed };
+  } catch (error) {
     astViolations.push({
       ruleId: 'SYNTAX_OR_PARSE_ERROR',
       severity: 'error',
       file: args.verilog_sources[0] || 'unknown',
       line: 1,
-      message: `Failed to generate Verilator AST: ${astRes.stderr.trim() || 'Unknown parse error'}`,
-      fixSuggestion: 'Check syntax and ensure all referenced modules/headers exist.',
+      message: `Failed to generate or parse Verilator AST: ${error instanceof Error ? error.message : String(error)}`,
+      fixSuggestion: 'Check the source syntax, referenced modules, and Verilator AST support.',
     });
   }
 

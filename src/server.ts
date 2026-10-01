@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
@@ -30,13 +31,15 @@ import {
   rtlGenerateAssertionSchema,
 } from './tools/assertion.js';
 
+const packageInfo = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+
 export function createServer(): Server {
   const runner = new ToolRunner();
 
   const server = new Server(
     {
-      name: '@zesun33/mcp-rtl-review',
-      version: '0.2.1',
+      name: packageInfo.name,
+      version: packageInfo.version,
     },
     {
       capabilities: {

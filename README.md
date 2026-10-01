@@ -41,7 +41,7 @@ For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-a
 {
   "runtime": "podman",
   "image": "ghcr.io/zesun33/verilog",
-  "verilatorVersion": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)",
+  "verilatorVersion": "Verilator 5.050 2026-07-01 rev vUNKNOWN-built20260907",
   "rulesSupported": [
     "SEQ_BLOCKING_ASSIGN",
     "COMB_NONBLOCKING_ASSIGN",
@@ -153,7 +153,7 @@ For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-a
 
 | Tool | Parameters | Engine | Description |
 | :--- | :--- | :--- | :--- |
-| `rtl_review` | `verilog_sources: string[]`<br>`top_module?: string`<br>`ruleset?: "strict" \| "standard" \| "relaxed"`<br>`include_info?: boolean`<br>`cwd?: string` | Verilator XML AST + Diagnostics | Full AST-backed static RTL review evaluating assignment discipline, reset polarity, bitwidths, and undriven nets, returning a 0–100 Quality Score. |
+| `rtl_review` | `verilog_sources: string[]`<br>`top_module?: string`<br>`ruleset?: "strict" \| "standard" \| "relaxed"`<br>`include_info?: boolean`<br>`cwd?: string` | Verilator JSON/XML AST + Diagnostics | Full AST-backed static RTL review evaluating assignment discipline, reset polarity, bitwidths, and undriven nets, returning a 0–100 Quality Score. |
 | `rtl_check_assignments` | `verilog_sources: string[]`<br>`top_module?: string`<br>`cwd?: string` | AST Assignment Visitor | Audits source files specifically for assignment discipline violations (`=` in sequential or `<=` in combinational). |
 | `rtl_check_widths` | `verilog_sources: string[]`<br>`top_module?: string`<br>`cwd?: string` | Verilator Semantic Lint | Performs bitwidth analysis to identify implicit truncation and unintended extension bugs. |
 | `rtl_check_resets` | `verilog_sources: string[]`<br>`top_module?: string`<br>`cwd?: string` | AST Reset Visitor | Audits reset usage per sequential block: presence, identity, edge, and polarity agreement. |
@@ -161,6 +161,16 @@ For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-a
 | `rtl_toolchain_info` | `cwd?: string` | Probe | Returns container/host runtime and version information for the Verilator AST parser and supported rule catalog. |
 
 ---
+
+## AST backend compatibility
+
+The server selects `--json-only` when the installed Verilator advertises it and reads the JSON tree with its separate file metadata. Older toolchains without that option use `--xml-only`. Both feed the same assignment/reset rule engine. Verilator removed XML output in 5.046; see the [official option reference](https://verilator.org/guide/latest/exe_verilator.html#cmdoption-xml-only).
+
+Verified against the available container toolchains: all 12 integration tests pass on both Verilator 5.050 (JSON) and 5.020 (legacy XML). The JSON parser fixture was captured from 5.050's `clean_counter` output; pointer metadata is excluded because review uses file IDs and source locations.
+
+Compiler diagnostics and nonzero exits are preserved through temporary-file cleanup. Missing, malformed, or module-free AST output produces a failed review/assignment/reset audit, even if the compiler exits zero. Source paths and top-module arguments are passed as literal arguments rather than interpolated shell text.
+
+Until this source change is released to npm, run the fixed checkout with `npm ci`, `npm run build`, and a client command pointing to `node /path/to/mcp-rtl-review/dist/index.js`. Published `@zesun33/mcp-rtl-review@0.2.1` still contains the earlier backend.
 
 ## Execution Runtime
 

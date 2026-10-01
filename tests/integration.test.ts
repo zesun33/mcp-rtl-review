@@ -202,3 +202,19 @@ test('Integration: rtl_check_resets audits missing vs clean designs', async () =
   assert.equal(goodData.blocks[0].resetName, 'rst_n');
   assert.equal(goodData.blocks[0].resetEdge, 'NEG');
 });
+
+test('Integration: missing RTL produces an AST error in every AST-backed tool', async () => {
+  const runner = new ToolRunner();
+  const args = {verilog_sources:['fixtures/does_not_exist.v'], cwd:projectRoot};
+  const ast = await runner.generateAst(args.verilog_sources, {cwd:projectRoot});
+  assert.notEqual(ast.exitCode, 0);
+  assert.match(ast.stderr, /does_not_exist|Cannot find/i);
+  const review = JSON.parse((await handleRtlReview(runner, args)).content[0].text);
+  assert.equal(review.passed, false);
+  assert.ok(review.violations.some((v: any) => v.ruleId === 'SYNTAX_OR_PARSE_ERROR'));
+  for (const handler of [handleRtlCheckAssignments, handleRtlCheckResets]) {
+    const data = JSON.parse((await handler(runner, args)).content[0].text);
+    assert.equal(data.passed, false);
+    assert.match(data.error, /Failed to generate or parse AST/);
+  }
+});

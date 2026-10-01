@@ -1,6 +1,7 @@
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import fs from 'fs';
 import {
+  AstGenerationResult,
   AstLocation,
   AstSenItem,
   AstAssignment,
@@ -21,7 +22,8 @@ export function parseLocation(locStr: string): AstLocation {
     };
   }
 
-  const parts = locStr.split(',');
+  // XML uses comma-separated coordinates; JSON uses file,line:col,line:col.
+  const parts = locStr.replace(/:/g, ',').split(',');
   return {
     fileId: parts[0] || '',
     startLine: parseInt(parts[1] || '1', 10),
@@ -305,4 +307,107 @@ function hasConstantZeroAssignment(node: any): boolean {
     }
   }
   return false;
+}
+
+/** Parse the modern Verilator JSON tree and its separate file-ID metadata. */
+export function parseVerilatorJson(
+  treeContent: string,
+  metadataContent: string,
+  sourceFilesContent?: Map<string, string>
+): ParsedAst {
+  const tree = JSON.parse(treeContent);
+  const metadata = JSON.parse(metadataContent);
+  if (tree?.type !== 'NETLIST' || !Array.isArray(tree.modulesp)
+      || !metadata?.files || typeof metadata.files !== 'object') {
+    throw new Error('Unsupported Verilator JSON AST or file metadata');
+  }
+  const files = new Map<string, string>();
+  for (const [id, entry] of Object.entries(metadata.files)) {
+    const filename = (entry as { filename?: string }).filename;
+    if (typeof filename === 'string') files.set(id, filename);
+  }
+  const modules: AstModule[] = [];
+  // modulesp is the elaborated design. Do not include the synthetic constant-pool
+  // module reachable through miscsp, which is not a user RTL module.
+  for (const mod of tree.modulesp) {
+    if (mod.type !== 'MODULE') continue;
+    const modLoc = parseLocation(mod.loc || '');
+    const file = files.get(modLoc.fileId) || modLoc.fileId;
+    const alwaysBlocks: AstAlwaysBlock[] = [];
+    for (const alw of findJsonNodes(mod, 'ALWAYS')) {
+      const loc = parseLocation(alw.loc || '');
+      const alwFile = files.get(loc.fileId) || file;
+      const senItems: AstSenItem[] = findJsonNodes(alw, 'SENITEM').map((item) => ({
+        edgeType: item.edgeType,
+        signalName: findJsonNodes(item, 'VARREF')[0]?.name,
+      }));
+      const assignments: AstAssignment[] = findJsonNodes(alw, 'ASSIGN', 'ASSIGNDLY').map((assign) => {
+        const assignLoc = parseLocation(assign.loc || '');
+        return {
+          type: assign.type === 'ASSIGNDLY' ? 'nonblocking' : 'blocking',
+          file: files.get(assignLoc.fileId) || alwFile,
+          line: assignLoc.startLine,
+          column: assignLoc.startCol,
+          targetVar: findJsonNodes(assign.lhsp?.[0], 'VARREF')[0]?.name,
+        };
+      });
+      const isSequential = senItems.some((item) => item.edgeType === 'POS' || item.edgeType === 'NEG');
+      const negReset = senItems.find((item) => item.edgeType === 'NEG'
+        && item.signalName && /rst|reset/i.test(item.signalName));
+      let resetMismatchDetails: AstAlwaysBlock['resetMismatchDetails'];
+      if (negReset?.signalName) {
+        const resetName = negReset.signalName;
+        const topIf = findJsonNodes(alw, 'IF')[0];
+        if (topIf?.condp?.[0]?.type === 'VARREF' && topIf.condp[0].name === resetName) {
+          const ifLoc = parseLocation(topIf.loc || '');
+          const source = sourceFilesContent?.get(alwFile);
+          // Elaboration normalizes !rst_n by swapping then/else branches. Use
+          // original RTL when available, just as the XML parser does.
+          const activeHigh = source !== undefined
+            ? new RegExp(`if\\s*\\(\\s*${resetName}\\s*\\)`).test(source.split('\n')[ifLoc.startLine - 1] || '')
+            : (topIf.thensp || []).some((branch: any) =>
+              findJsonNodes(branch, 'ASSIGN', 'ASSIGNDLY').some((assign) =>
+                (assign.rhsp || []).some((rhs: any) => rhs.type === 'CONST'
+                  && /(?:'h0|'b0|^0)$/.test(rhs.name || ''))));
+          if (activeHigh) {
+            resetMismatchDetails = { resetName, expectedCondition: `!${resetName}`,
+              actualCondition: resetName, line: ifLoc.startLine };
+          }
+        }
+      }
+      alwaysBlocks.push({ loc, senItems, isSequential, assignments,
+        hasResetMismatch: !!resetMismatchDetails, resetMismatchDetails });
+    }
+    modules.push({ name: mod.name || 'unknown', file, alwaysBlocks });
+  }
+  return { files, modules };
+}
+
+function findJsonNodes(node: any, ...types: string[]): any[] {
+  if (!node || typeof node !== 'object') return [];
+  const result: any[] = types.includes(node.type) ? [node] : [];
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const child of value) result.push(...findJsonNodes(child, ...types));
+    }
+  }
+  return result;
+}
+
+/** Reject missing/invalid ASTs even when the compiler incorrectly exits zero. */
+export function parseGeneratedAst(
+  result: AstGenerationResult,
+  sourceFilesContent?: Map<string, string>
+): ParsedAst {
+  if (result.exitCode !== 0 || !result.content.trim()) {
+    throw new Error(result.stderr.trim() || 'Verilator did not produce an AST');
+  }
+  if (result.format === 'xml' && XMLValidator.validate(result.content) !== true) {
+    throw new Error('Malformed Verilator XML AST');
+  }
+  const ast = result.format === 'json'
+    ? parseVerilatorJson(result.content, result.metadata || '', sourceFilesContent)
+    : parseVerilatorXml(result.content, sourceFilesContent);
+  if (ast.modules.length === 0) throw new Error('Verilator AST contains no design modules');
+  return ast;
 }

@@ -11,7 +11,7 @@
     "build": "tsc",
     "watch": "tsc --watch",
     "test": "tsx --test tests/**/*.test.ts",
-    "test:unit": "tsx --test tests/ast_parser.test.ts tests/rules.test.ts tests/contract.test.ts",
+    "test:unit": "tsx --test tests/ast_parser.test.ts tests/rules.test.ts tests/contract.test.ts tests/runner.test.ts tests/ast_failure.test.ts",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build"
   },

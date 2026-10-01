@@ -114,3 +114,11 @@ export interface ParsedAst {
   files: Map<string, string>; // fileId -> filename
   modules: AstModule[];
 }
+
+export interface AstGenerationResult {
+  format: 'xml' | 'json';
+  content: string;
+  metadata?: string;
+  stderr: string;
+  exitCode: number;
+}

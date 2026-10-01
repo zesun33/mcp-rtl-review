@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { ToolchainInfo } from './parsers/types.js';
+import { AstGenerationResult, ToolchainInfo } from './parsers/types.js';
 import { SUPPORTED_RULES } from './rules/engine.js';
 
 export interface RunOptions {
@@ -150,25 +150,58 @@ export class ToolRunner {
     };
   }
 
-  public async generateXmlAst(
+  public async generateAst(
     sources: string[],
     options: { topModule?: string; cwd?: string; timeoutMs?: number } = {}
-  ): Promise<{ xml: string; stderr: string; exitCode: number }> {
+  ): Promise<AstGenerationResult> {
     const topArgs = options.topModule ? ['--top-module', options.topModule] : [];
-    // We execute a bash command inside the container that outputs XML directly to stdout
+    // Arguments stay positional so paths and module names are never shell code.
+    // stdout contains only AST data; diagnostics stay on stderr. The EXIT trap
+    // removes the temporary directory without replacing the compiler's status.
     const bashScript = `
-TMPDIR=$(mktemp -d)
-verilator --xml-only -Wno-fatal ${topArgs.join(' ')} ${sources.join(' ')} -Mdir "$TMPDIR" > /dev/null 2>&1
-cat "$TMPDIR"/V*.xml 2>/dev/null
-rm -rf "$TMPDIR"
+set -e
+ast_dir=$(mktemp -d)
+trap 'rm -rf "$ast_dir"' EXIT
+help=$(verilator --help 2>&1)
+if [[ "$help" == *"--json-only"* ]]; then
+  verilator --json-only -Wno-fatal "$@" -Mdir "$ast_dir" \
+    --json-only-output "$ast_dir/ast.json" \
+    --json-only-meta-output "$ast_dir/meta.json" >&2
+  test -s "$ast_dir/ast.json"
+  test -s "$ast_dir/meta.json"
+  printf 'json\n'
+  cat "$ast_dir/ast.json"
+  printf '\n__MCP_RTL_REVIEW_METADATA__\n'
+  cat "$ast_dir/meta.json"
+else
+  verilator --xml-only -Wno-fatal "$@" -Mdir "$ast_dir" >&2
+  printf 'xml\n'
+  cat "$ast_dir"/V*.xml
+fi
 `;
-    const res = await this.execute('bash', ['-c', bashScript], {
+    const res = await this.execute('bash', ['-c', bashScript, 'mcp-rtl-review', ...topArgs, ...sources], {
       cwd: options.cwd,
       timeoutMs: options.timeoutMs ?? 20000,
     });
-
+    const newline = res.stdout.indexOf('\n');
+    const header = res.stdout.slice(0, newline);
+    if (header !== 'json' && header !== 'xml') {
+      return {
+        format: 'json', content: '',
+        stderr: res.stderr.trim() || 'Verilator did not produce an AST',
+        exitCode: res.exitCode || 1,
+      };
+    }
+    const payload = res.stdout.slice(newline + 1);
+    if (header === 'xml') {
+      return { format: 'xml', content: payload, stderr: res.stderr, exitCode: res.exitCode };
+    }
+    const marker = '\n__MCP_RTL_REVIEW_METADATA__\n';
+    const metadataStart = payload.indexOf(marker);
     return {
-      xml: res.stdout,
+      format: 'json',
+      content: metadataStart === -1 ? payload : payload.slice(0, metadataStart),
+      metadata: metadataStart === -1 ? '' : payload.slice(metadataStart + marker.length),
       stderr: res.stderr,
       exitCode: res.exitCode,
     };
