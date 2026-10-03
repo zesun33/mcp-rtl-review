@@ -53,14 +53,14 @@ jobs:
           npm install --prefix /tmp/rtl-release-smoke --ignore-scripts --no-audit --no-fund "$PWD/$(node -p "'release/'+require('./release/pack.json')[0].filename")"
           node scripts/package-smoke.mjs /tmp/rtl-release-smoke/node_modules/@zesun33/mcp-rtl-review/dist/index.js
       - name: Preview publication
-        run: npm publish release/*.tgz --dry-run --access public
+        run: npm publish ./release/*.tgz --dry-run --access public
       - uses: actions/upload-artifact@v4
         with:
           name: npm-release-${{ inputs.version }}
           path: release/
       - name: Publish the tested tarball through OIDC
         if: inputs.publish
-        run: npm publish release/*.tgz --access public --registry=https://registry.npmjs.org
+        run: npm publish ./release/*.tgz --access public --registry=https://registry.npmjs.org
       - name: Verify published integrity
         if: inputs.publish
         run: node scripts/verify-release.mjs release/pack.json

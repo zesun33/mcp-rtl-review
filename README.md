@@ -174,7 +174,7 @@ Version `0.2.2` includes the JSON AST backend and legacy XML fallback. Use `npx 
 
 ## Execution Runtime
 
-For tested tarball releases and GitHub Actions trusted publishing, see [RELEASING.md](RELEASING.md).
+For tested tarball releases and GitHub Actions trusted publishing, see [RELEASING.md](https://github.com/zesun33/mcp-rtl-review/blob/main/RELEASING.md).
 
 `mcp-rtl-review` runs inside the [`zesun33/verilog`](https://github.com/zesun33/eda-docker-images) rootless Podman image so tools are identical on any Linux host.
 
