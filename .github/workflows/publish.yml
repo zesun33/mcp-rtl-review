@@ -1,0 +1,66 @@
+name: npm release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact package version expected in this checkout
+        required: true
+        type: string
+      publish:
+        description: Publish after verification (requires npm trusted publisher configuration)
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install npm with trusted publishing support
+        run: npm install --global npm@11.16.0
+      - name: Check expected package version
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; import assert from 'node:assert/strict'; const p=JSON.parse(fs.readFileSync('package.json')); const l=JSON.parse(fs.readFileSync('package-lock.json')); assert.equal(p.version,process.env.EXPECTED_VERSION); assert.equal(l.version,p.version); assert.equal(l.packages[''].version,p.version);"
+      - run: npm ci
+      - run: bash scripts/verify.sh --quick
+      - name: Build and pack the release
+        run: |
+          mkdir release
+          npm pack --ignore-scripts --pack-destination release --json > release/pack.json
+          node --input-type=module -e "import fs from 'node:fs'; import assert from 'node:assert/strict'; const p=JSON.parse(fs.readFileSync('release/pack.json'))[0]; assert(p.files.some(f=>f.path==='dist/index.js')); assert(p.files.some(f=>f.path==='dist/parsers/ast.js'));"
+      - name: Install and smoke-test the packed release
+        run: |
+          mkdir -p /tmp/rtl-release-smoke
+          npm install --prefix /tmp/rtl-release-smoke --ignore-scripts --no-audit --no-fund "$PWD/$(node -p "'release/'+require('./release/pack.json')[0].filename")"
+          node scripts/package-smoke.mjs /tmp/rtl-release-smoke/node_modules/@zesun33/mcp-rtl-review/dist/index.js
+      - name: Preview publication
+        run: npm publish release/*.tgz --dry-run --access public
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-release-${{ inputs.version }}
+          path: release/
+      - name: Publish the tested tarball through OIDC
+        if: inputs.publish
+        run: npm publish release/*.tgz --access public --registry=https://registry.npmjs.org
+      - name: Verify published integrity
+        if: inputs.publish
+        run: node scripts/verify-release.mjs release/pack.json
