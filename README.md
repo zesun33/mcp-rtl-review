@@ -1,5 +1,26 @@
 # @zesun33/mcp-rtl-review
 
+<!-- BEGIN GENERATED PROJECT GUIDE -->
+
+## Purpose and first steps
+
+Review RTL assignment, width, and reset rules before simulation through an MCP server.
+
+**Who it is for:** Hardware engineers using an MCP-capable client or coding agent.
+
+**First task:** Configure the server in your MCP client, then call `rtl_toolchain_info` before running a design.
+
+**What to expect:** AST-backend availability, then rule findings with source locations and a review score.
+
+**Current scope:** Published static-analysis server using a Verilator AST backend. A review score covers the implemented rules and does not replace simulation or formal properties. The npx command waits for an MCP client.
+
+**Start here:** [Runtime requirements and configuration](README.md#execution-runtime).
+
+**Related projects:** [hw-agent-skills](https://github.com/zesun33/hw-agent-skills), [mcp-verilog](https://github.com/zesun33/mcp-verilog), [mcp-formal](https://github.com/zesun33/mcp-formal).
+
+[Choose another project](https://github.com/zesun33/personal-projects/blob/main/GETTING_STARTED.md).
+<!-- END GENERATED PROJECT GUIDE -->
+
 > Model Context Protocol (MCP) server for AST-backed static RTL code review, semantic bug detection, and code review scoring.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
@@ -7,7 +28,7 @@
 [![Protocol: MCP](https://img.shields.io/badge/protocol-MCP_stdio-blueviolet)](https://modelcontextprotocol.io)
 [![Runtime: Rootless Podman](https://img.shields.io/badge/runtime-rootless_podman-brightgreen)](#execution-runtime)
 
-`mcp-rtl-review` equips AI coding agents and IDEs (**Cursor**, **Windsurf**, **GitHub Copilot / OpenAI Codex**, **Claude Code**, **Google Antigravity**, **OpenCode**, **Cline**) with structured tools to perform semantic Verilog/SystemVerilog code reviews. It programmatically enforces the cognitive rubrics established in [`hw-agent-skills/skills/rtl-reviewer`](../hw-agent-skills/skills/rtl-reviewer/SKILL.md), parsing full typed ASTs to catch race conditions, improper assignment styles, inverted reset polarities, and bitwidth truncations.
+`mcp-rtl-review` equips AI coding agents and IDEs (**Cursor**, **Windsurf**, **GitHub Copilot / OpenAI Codex**, **Claude Code**, **Google Antigravity**, **OpenCode**, **Cline**) with structured tools to perform semantic Verilog/SystemVerilog code reviews. It programmatically enforces the cognitive rubrics established in [`hw-agent-skills/skills/rtl-reviewer`](https://github.com/zesun33/hw-agent-skills/blob/main/skills/rtl-reviewer/SKILL.md), parsing full typed ASTs to catch race conditions, improper assignment styles, inverted reset polarities, and bitwidth truncations.
 
 ## Install and run
 
@@ -23,6 +44,8 @@ For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-a
 
 ## ⚡ Quick Tour: See It in Action
 
+The examples below illustrate tool requests and result fields. Timings, counts, and scores depend on the input and runtime; they are not guaranteed outcomes or fresh verification results.
+
 ### Why AI Agents Need `mcp-rtl-review`
 | Without `mcp-rtl-review` (Syntax Linters) | With `mcp-rtl-review` (AST-Backed Semantic Audit) |
 | :--- | :--- |
@@ -33,7 +56,7 @@ For the complete hardware-agent setup, use `npx -y @zesun33/create-hw-agent my-a
 | Agent has no feedback on overall design quality | Computes a deterministic **0–100 RTL Quality Score** |
 | Requires local installation of Verilator, Python, and C++ compilers | **Zero host configuration** (runs via isolated rootless Podman) |
 
-### Real Agent Scenarios in 60 Seconds
+### Example tool requests and results
 
 #### 1. Probing the Environment (Zero-Config Verification)
 ```json
