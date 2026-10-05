@@ -12,7 +12,7 @@ npm trust list @zesun33/mcp-rtl-review
 npm trust github @zesun33/mcp-rtl-review --repository zesun33/mcp-rtl-review --file publish.yml --allow-publish
 ```
 
-This configuration requires npm 11.10+ and package write access with account 2FA. Complete npm's browser verification yourself. If a trusted publisher already exists, inspect it instead of replacing or revoking it automatically. Alternatively, use the package Settings page on npm with GitHub owner `zesun33`, repository `mcp-rtl-review`, workflow `publish.yml`, and no environment restriction (the workflow has no environment).
+This configuration requires npm 11.15.0+ and package write access with account 2FA. Complete npm's browser verification yourself. If a trusted publisher already exists, inspect it instead of replacing or revoking it automatically. Alternatively, use the package Settings page on npm with GitHub owner `zesun33`, repository `mcp-rtl-review`, workflow `publish.yml`, and no environment restriction (the workflow has no environment).
 
 GitHub uses a short-lived OIDC token rather than an npm token secret. Public GitHub Actions publications get npm provenance automatically. See the [npm trusted publishing documentation](https://docs.npmjs.com/trusted-publishers/) and [npm trust CLI reference](https://docs.npmjs.com/cli/v11/commands/npm-trust/).
 
